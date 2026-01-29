@@ -160,17 +160,28 @@ function startBackendServer() {
         console.log("📁 Created resources directory:", resourcesPath);
       }
       
-      // Find the build path for the React app
+      // Determine if we're in an asar archive
+      const isInAsar = __dirname.includes('app.asar');
+      
+      // Find the build path for the React app - prioritize unpacked version
       const possibleBuildPaths = [
+        // HIGHEST PRIORITY: app.asar.unpacked/build (will contain all React build files after fix)
         path.join(process.resourcesPath, "app.asar.unpacked", "build"),
+        // Also check other locations as fallback
         path.join(process.resourcesPath, "app", "build"),
         path.join(process.resourcesPath, "build"),
+        isInAsar && path.join(__dirname.replace('app.asar', 'app.asar.unpacked'), 'build'),
         path.join(__dirname, "build"),
+        path.join(path.dirname(process.execPath), "resources", "app.asar.unpacked", "build"),
         path.join(path.dirname(process.execPath), "resources", "app", "build")
-      ];
+      ].filter(p => p); // Remove any undefined values
       
+      console.log("🔍 Searching for build directory...");
       for (const p of possibleBuildPaths) {
-        if (fs.existsSync(p)) {
+        const exists = fs.existsSync(p);
+        const hasIndex = exists && fs.existsSync(path.join(p, 'index.html'));
+        console.log(`   ${exists ? (hasIndex ? '✅ VALID' : '⚠️  EXISTS (no index.html)') : '❌ NOT FOUND'}: ${p}`);
+        if (exists && hasIndex && !buildPath) {
           buildPath = p;
           console.log("✅ Found build directory at:", buildPath);
           break;
@@ -217,10 +228,19 @@ function startBackendServer() {
       PORT: "5001",
       REACT_APP_API_URL: "http://localhost:5001",
       RESOURCES_PATH: resourcesPath,
-      BUILD_PATH: buildPath || "" // Pass build path to server
+      BUILD_PATH: buildPath || "",
+      // Add explicit paths for debugging
+      APP_ROOT: __dirname,
+      IS_PACKAGED: (!isDev).toString(),
+      PROCESS_RESOURCES_PATH: process.resourcesPath || ""
     };
 
-    console.log("🔧 Environment:", env.NODE_ENV, "Port:", env.PORT);
+    console.log("🔧 Environment Configuration:");
+    console.log("   NODE_ENV:", env.NODE_ENV);
+    console.log("   PORT:", env.PORT);
+    console.log("   BUILD_PATH:", env.BUILD_PATH);
+    console.log("   RESOURCES_PATH:", env.RESOURCES_PATH);
+    console.log("   IS_PACKAGED:", env.IS_PACKAGED);
 
     // Start the backend process
     let nodeExecutable;
@@ -235,16 +255,18 @@ function startBackendServer() {
       // DON'T redeclare resourcesPath - use the one from function scope!
       
       const possibleNodePaths = [
-        // Bundled node.exe in app.asar.unpacked/build (CORRECT PATH!)
+        // PRIMARY: Bundled node.exe in app.asar.unpacked/build
         path.join(process.resourcesPath, "app.asar.unpacked", "build", "node.exe"),
-        // Fallback: resources/app/build
+        // SECONDARY: Check if build folder is at resources root
+        path.join(process.resourcesPath, "build", "node.exe"),
+        // TERTIARY: Check app folder structure
         path.join(process.resourcesPath, "app", "build", "node.exe"),
-        // Bundled node.exe in build folder
         path.join(appPath, "resources", "app.asar.unpacked", "build", "node.exe"),
-        path.join(appPath, "resources", "app", "build", "node.exe"),
-        // Electron's directory (if available)
-        path.join(appPath, "node.exe"),
-        // System Node.js installations  
+        path.join(appPath, "resources", "build", "node.exe"),
+        // Check relative to server.js location
+        path.join(path.dirname(serverPath), "build", "node.exe"),
+        path.join(path.dirname(serverPath), "node.exe"),
+        // System Node.js installations (LAST RESORT)
         path.join(process.env.ProgramFiles || "C:\\Program Files", "nodejs", "node.exe"),
         path.join(process.env['ProgramFiles(x86)'] || "C:\\Program Files (x86)", "nodejs", "node.exe"),
         path.join(process.env.LOCALAPPDATA, "Programs", "nodejs", "node.exe")
@@ -298,21 +320,34 @@ function startBackendServer() {
     backendProcess = spawn(nodeExecutable, args, {
       stdio: ["pipe", "pipe", "pipe"],
       env: env,
-      windowsHide: false, // ALWAYS show console for debugging
-      detached: false
+      windowsHide: false, // Always show console to catch startup errors
+      detached: false,
+      shell: false // Use direct execution for reliability
     });
 
-    // Set a timeout for backend startup (30 seconds max)
+    log("✅ Backend process spawned with PID:", backendProcess.pid);
+
+    // Set a timeout for backend startup (45 seconds for production)
+    const timeoutDuration = isDev ? 30000 : 45000;
     const startupTimeout = setTimeout(() => {
       if (isBackendStarting) {
-        console.error("⏰ Backend startup timeout after 30 seconds");
+        log("⏰ Backend startup timeout after", timeoutDuration / 1000, "seconds");
+        log("💡 This may indicate:");
+        log("   - Database initialization issues");
+        log("   - Missing dependencies");
+        log("   - Port conflicts");
+        log("   - File permission issues");
+        
         if (backendProcess && !backendProcess.killed) {
           backendProcess.kill('SIGTERM');
         }
         isBackendStarting = false;
+        
+        const errorMsg = `Backend failed to start within ${timeoutDuration / 1000} seconds.\n\nLog file: ${logFile}\n\nPlease check the log file for details.`;
+        dialog.showErrorBox("Backend Timeout", errorMsg);
         reject(new Error("Backend startup timeout"));
       }
-    }, 30000);
+    }, timeoutDuration);
 
     // Handle process events
     backendProcess.on("error", (error) => {
@@ -341,13 +376,23 @@ function startBackendServer() {
 
     // Capture output for debugging
     if (backendProcess.stdout) {
+      let outputBuffer = '';
       backendProcess.stdout.on('data', (data) => {
         const output = data.toString();
-        log("📤 Backend stdout:", output);
+        outputBuffer += output;
+        
+        // Log each line separately for better readability
+        const lines = output.split('\n');
+        lines.forEach(line => {
+          if (line.trim()) {
+            log("[BACKEND]", line.trim());
+          }
+        });
         
         // Look for success indicators
-        if (output.includes('SERVER_READY:') || output.includes('Server running on') || output.includes('listening on')) {
+        if (output.includes('SERVER_READY:') || output.includes('SERVER READY AND LISTENING')) {
           log("✅ Backend server started successfully!");
+          log("✅ Backend is ready to accept connections");
           clearTimeout(startupTimeout);
           isBackendStarting = false;
           backendStartupAttempts = 0; // Reset on success
@@ -359,14 +404,37 @@ function startBackendServer() {
     if (backendProcess.stderr) {
       backendProcess.stderr.on('data', (data) => {
         const output = data.toString();
-        log("📤 Backend stderr:", output);
+        const lines = output.split('\n');
+        lines.forEach(line => {
+          if (line.trim()) {
+            log("[BACKEND ERROR]", line.trim());
+          }
+        });
         
         // Look for critical errors
         if (output.includes('EADDRINUSE') || output.includes('address already in use')) {
-          console.error("🔴 Port already in use!");
+          log("🔴 CRITICAL: Port already in use!");
           clearTimeout(startupTimeout);
           isBackendStarting = false;
+          
+          dialog.showErrorBox(
+            "Port Already in Use",
+            "Port 5001 is already in use.\n\nAnother instance of the application may be running.\n\nPlease close it and try again."
+          );
           reject(new Error("Port already in use - another instance may be running"));
+        } else if (output.includes('Cannot find module')) {
+          log("🔴 CRITICAL: Missing module dependency!");
+          clearTimeout(startupTimeout);
+          isBackendStarting = false;
+          
+          dialog.showErrorBox(
+            "Missing Dependencies",
+            "The application is missing required dependencies.\n\nThis is a packaging error. Please reinstall the application.\n\nError: " + output
+          );
+          reject(new Error("Missing module dependency: " + output));
+        } else if (output.includes('ENOENT') || output.includes('no such file')) {
+          log("🔴 CRITICAL: File not found error!");
+          log("🔴 This may indicate missing database or config files");
         }
       });
     }

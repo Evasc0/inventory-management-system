@@ -5,6 +5,7 @@ import EmployeePanel from "./components/EmployeePanel";
 import SupervisorPanel from "./components/SupervisorPanel";
 import Login from "./components/Login";
 import ReturnsPanel from "./components/returnsPanel";
+import EnhancedReturnsPanel from "./components/EnhancedReturnsPanel";
 import "./App.css";
 import EmployeeReceipts from "./components/EmployeeReceipts";
 import EmployeeAddArticle from "./components/EmployeeAddArticle";
@@ -90,7 +91,8 @@ function App() {
           <Route path="/manage-returns" element={<ReturnsManagement />} />
           <Route path="/manage-articles" element={<ArticlesManagement />} />
           <Route path="/employee-receipts" element={<EmployeeReceipts userName={userName} />} />
-          <Route path="/returns-panel" element={<ReturnsPanel />} />
+          <Route path="/returns-panel" element={<EnhancedReturnsPanel />} />
+          <Route path="/returns-panel-old" element={<ReturnsPanel />} />
           <Route path="/add-article" element={<EmployeeAddArticle userName={userName} />} />
           <Route
             path="/admin"

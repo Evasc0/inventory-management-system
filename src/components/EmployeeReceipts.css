@@ -89,9 +89,22 @@
 
 .employee-receipts .receipt-main {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 16px;
   margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .employee-receipts .receipt-main {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .employee-receipts .receipt-main {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .employee-receipts .receipt-main > div {
@@ -219,8 +232,12 @@
   font-style: italic;
 }
 
-/* 📱 Responsive Design */
+/* 📱 Responsive Design - Enhanced for Mobile */
 @media (max-width: 768px) {
+  .employee-receipts {
+    padding: 0;
+  }
+
   .employee-receipts h2 {
     font-size: 24px;
     text-align: center;
@@ -228,47 +245,93 @@
 
   .employee-receipts .receipt-main {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 14px;
   }
 
   .employee-receipts .receipt-details {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 14px;
+    padding: 16px;
   }
 
   .employee-receipts .receipt-bubble {
-    padding: 16px;
-    margin: 0 -8px;
+    padding: 20px;
+    margin: 0;
+    border-radius: 16px;
   }
 
   .employee-receipts .view-details-btn {
-    padding: 10px 20px;
-    font-size: 14px;
+    padding: 12px 20px;
+    font-size: 15px;
     align-self: stretch;
+    justify-content: center;
+  }
+
+  .employee-receipts .receipt-list {
+    width: 100%;
+    max-width: 100%;
   }
 }
 
 @media (max-width: 480px) {
   .employee-receipts h2 {
-    font-size: 20px;
+    font-size: 22px;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
   }
 
   .employee-receipts .receipt-bubble {
-    padding: 12px;
-    margin: 0 -12px;
-    border-radius: 12px;
+    padding: 18px;
+    margin: 0;
+    border-radius: 14px;
   }
 
   .employee-receipts input {
-    padding: 12px 12px 12px 40px;
-    font-size: 14px;
+    padding: 14px 14px 14px 44px;
+    font-size: 15px;
   }
 
   .employee-receipts .search-section i {
-    left: 12px;
-    font-size: 14px;
+    left: 14px;
+    font-size: 15px;
+  }
+
+  .employee-receipts .receipt-main > div,
+  .employee-receipts .receipt-details > div {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+  }
+
+  .employee-receipts .receipt-main > div:last-child,
+  .employee-receipts .receipt-details > div:last-child {
+    border-bottom: none;
+  }
+}
+
+/* Desktop wider view */
+@media (min-width: 1200px) {
+  .employee-receipts .receipt-list {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .employee-receipts .receipt-main {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .employee-receipts .receipt-details {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Tablet view optimization */
+@media (min-width: 769px) and (max-width: 1199px) {
+  .employee-receipts .receipt-main {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .employee-receipts .receipt-details {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 

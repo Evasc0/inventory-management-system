@@ -41,25 +41,46 @@ const SupervisorArticles = () => {
             <th>Property No.</th>
             <th>Unit</th>
             <th>Unit Value</th>
-            <th>On Hand</th> {/* ✅ Added column */}
-            <th>Balance</th> {/* ✅ Added column */}
+            <th>On Hand</th>
+            <th>Balance</th>
             <th>Total Amount</th>
             <th>Actual User</th>
+            <th>Return Status</th>
             <th>Remarks</th>
           </tr>
         </thead>
         <tbody>
           {filteredArticles.map((article, index) => (
-            <tr key={index}>
-              <td>{article.article}</td>
+            <tr key={index} className={article.has_returns ? 'has-returns' : ''}>
+              <td>
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  <span>{article.article}</span>
+                  {article.has_returns && (
+                    <span className="return-badge" title={`${article.return_count} return(s) recorded`}>
+                      <i className="fas fa-undo"></i> {article.return_count}
+                    </span>
+                  )}
+                </div>
+              </td>
               <td>{article.description}</td>
               <td>{article.property_number}</td>
               <td>{article.unit}</td>
               <td>₱{parseFloat(article.unit_value).toFixed(2)}</td>
-              <td>{article.on_hand_per_count ?? "N/A"}</td> {/* ✅ Fixed variable */}
-              <td>{article.balance_per_card ?? "N/A"}</td> {/* ✅ Fixed variable */}
+              <td>{article.on_hand_per_count ?? "N/A"}</td>
+              <td>{article.balance_per_card ?? "N/A"}</td>
               <td>₱{parseFloat(article.total_amount).toFixed(2)}</td>
               <td>{article.actual_user}</td>
+              <td>
+                {article.has_returns ? (
+                  <span className="status-returned">
+                    <i className="fas fa-check-circle"></i> Returned ({article.return_count}x)
+                  </span>
+                ) : (
+                  <span className="status-active">
+                    <i className="fas fa-circle"></i> Active
+                  </span>
+                )}
+              </td>
               <td>{article.remarks}</td>
             </tr>
           ))}

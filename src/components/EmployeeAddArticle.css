@@ -7,7 +7,7 @@
 }
 
 .employee-add-article .form-container {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
@@ -36,9 +36,16 @@
 
 .employee-add-article .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 24px;
   margin-bottom: 32px;
+}
+
+/* Responsive: Single column on mobile/tablet */
+@media (max-width: 768px) {
+  .employee-add-article .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .employee-add-article .form-group {

@@ -128,7 +128,9 @@ const ArticlesManagement = () => {
       // Prepare the data for update
       const updatedProduct = {
         article: editingProduct.article,
+        property_number: editingProduct.property_number || '',
         description: editingProduct.description || '',
+        date_acquired: editingProduct.date_acquired || '',
         unit: editingProduct.unit || '',
         unit_value: parseFloat(editingProduct.unit_value) || 0,
         balance_per_card: parseFloat(editingProduct.balance_per_card) || 0,
@@ -155,6 +157,7 @@ const ArticlesManagement = () => {
       if (response.data) {
         alert('Product updated successfully!');
         setEditingProduct(null);
+        // Only refetch after successful update
         fetchProducts();
       }
     } catch (error) {
@@ -213,9 +216,14 @@ const ArticlesManagement = () => {
     <div className="articles-management">
       <div className="articles-header">
         <h2>Articles Management</h2>
-        <button onClick={() => navigate('/admin')} className="back-btn">
-          ← Back to Admin Panel
-        </button>
+        <div className="header-actions">
+          <button onClick={fetchProducts} className="refresh-btn-sm">
+            <i className="fas fa-sync-alt"></i> Refresh
+          </button>
+          <button onClick={() => navigate('/admin')} className="back-btn">
+            ← Back to Admin Panel
+          </button>
+        </div>
       </div>
 
       <div className="search-filter-container">
@@ -261,7 +269,9 @@ const ArticlesManagement = () => {
             <thead>
               <tr>
                 <th>Article</th>
+                <th>Property #</th>
                 <th>Description</th>
+                <th>Date Acquired</th>
                 <th>Unit</th>
                 <th>Unit Value</th>
                 <th>Balance</th>
@@ -274,9 +284,20 @@ const ArticlesManagement = () => {
             </thead>
             <tbody>
               {filteredProducts.map(product => (
-                <tr key={product.id}>
-                  <td>{product.article}</td>
+                <tr key={product.id} className={product.has_returns ? 'has-returns' : ''}>
+                  <td>
+                    <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                      <span>{product.article}</span>
+                      {product.has_returns && (
+                        <span className="return-badge" title={`${product.return_count} return(s) recorded`}>
+                          <i className="fas fa-undo"></i> {product.return_count}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td>{product.property_number || '-'}</td>
                   <td>{product.description || '-'}</td>
+                  <td>{product.date_acquired ? new Date(product.date_acquired).toLocaleDateString() : '-'}</td>
                   <td>{product.unit || '-'}</td>
                   <td>₱{product.unit_value_formatted}</td>
                   <td>{product.balance_per_card || '0'}</td>
@@ -342,11 +363,29 @@ const ArticlesManagement = () => {
                 />
               </div>
               <div className="form-group">
+                <label>Property Number:</label>
+                <input
+                  type="text"
+                  name="property_number"
+                  value={editingProduct.property_number || ''}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="form-group">
                 <label>Description:</label>
                 <input
                   type="text"
                   name="description"
-                  value={editingProduct.description}
+                  value={editingProduct.description || ''}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="form-group">
+                <label>Date Acquired:</label>
+                <input
+                  type="date"
+                  name="date_acquired"
+                  value={editingProduct.date_acquired ? editingProduct.date_acquired.split('T')[0] : ''}
                   onChange={handleInputChange}
                 />
               </div>

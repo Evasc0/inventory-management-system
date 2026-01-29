@@ -162,17 +162,24 @@
 
 .input-icon {
   position: absolute;
-  left: 10px;
+  left: 18px; /* Increased from 10px for better spacing */
+  top: 50%;
+  transform: translateY(-50%); /* Center vertically */
   color: #9ca3af;
   font-size: 16px;
   z-index: 1;
   transition: color 0.3s ease;
   pointer-events: none; /* Prevent icon from blocking input clicks */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
 }
 
 .input-container input {
   width: 100%;
-  padding: 16px 16px 16px 52px;
+  padding: 16px 16px 16px 50px; /* Adjusted from 52px to 50px */
   border: 2px solid #e5e7eb;
   border-radius: 12px;
   font-size: 16px;

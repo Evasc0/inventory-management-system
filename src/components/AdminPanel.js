@@ -3,6 +3,8 @@ import axios from "axios";
 import "./AdminPanel.css";
 import { useNavigate } from "react-router-dom";
 import AdminDashboard from "./AdminDashboard";
+import AddUserPanel from "./AddUserPanel";
+import SystemUsersPanel from "./SystemUsersPanel";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -423,157 +425,11 @@ const AdminPanel = ({ userName }) => {
   }
 
   if (currentView === 'users') {
-    return (
-      <div className="admin-panel">
-        <div className="admin-header-buttons">
-          <button className="dashboard-btn" onClick={() => setCurrentView('dashboard')}>
-            ← Back to Dashboard
-          </button>
-        </div>
+    return <SystemUsersPanel onBack={() => setCurrentView('dashboard')} />;
+  }
 
-        <h2>User Management</h2>
-        
-        {/* Add User Section */}
-        <div className="add-user-section">
-          <button onClick={() => setShowUserForm(!showUserForm)} className="toggle-form-btn">
-            {showUserForm ? "Cancel" : "Add Supervisor/Admin"}
-          </button>
-
-          {showUserForm && (
-            <form onSubmit={handleAddUser} className="user-form">
-              <h3>Add New User</h3>
-              <input type="text" name="name" placeholder="Name" value={newUser.name} onChange={handleUserChange} required />
-              <input type="password" name="password" placeholder="Password" value={newUser.password} onChange={handleUserChange} required />
-              <input type="password" name="confirmPassword" placeholder="Confirm Password" value={newUser.confirmPassword} onChange={handleUserChange} required />
-              <select name="role" value={newUser.role} onChange={handleUserChange} required>
-                <option value="supervisor">Supervisor</option>
-                <option value="admin">Admin</option>
-              </select>
-              <button type="submit">Add User</button>
-            </form>
-          )}
-        </div>
-
-        {/* Add Employee Section */}
-        <div className="add-employee-section">
-          <button onClick={() => setShowEmployeeForm(!showEmployeeForm)} className="toggle-form-btn">
-            {showEmployeeForm ? "Cancel" : "Add Employee"}
-          </button>
-
-          {showEmployeeForm && (
-            <form onSubmit={handleAddEmployee} className="employee-form">
-              <h3>Add New Employee</h3>
-              <input type="text" name="name" placeholder="Name" value={newEmployee.name} onChange={handleEmployeeChange} required />
-              <input type="text" name="position" placeholder="Position" value={newEmployee.position} onChange={handleEmployeeChange} />
-              <input type="text" name="department" placeholder="Department" value={newEmployee.department} onChange={handleEmployeeChange} />
-              <input type="email" name="email" placeholder="Email" value={newEmployee.email} onChange={handleEmployeeChange} />
-              <input type="text" name="contact_number" placeholder="Contact Number" value={newEmployee.contact_number} onChange={handleEmployeeChange} />
-              <input type="text" name="address" placeholder="Address" value={newEmployee.address} onChange={handleEmployeeChange} />
-              <input type="password" name="password" placeholder="Password" value={newEmployee.password} onChange={handleEmployeeChange} required />
-              <input type="password" name="confirmPassword" placeholder="Confirm Password" value={newEmployee.confirmPassword} onChange={handleEmployeeChange} required />
-              <button type="submit">Add Employee</button>
-            </form>
-          )}
-        </div>
-
-        {/* Users Table */}
-        <div className="users-table-section">
-          <h3>System Users</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.id}>
-                  <td>{user.name}</td>
-                  <td>{user.role}</td>
-                  <td>
-                    <button onClick={() => handleEditUser(user)}>Edit</button>
-                    <button onClick={() => handleDeleteUser(user.id)}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Employees Table */}
-        <div className="employees-table-section">
-          <h3>Employees</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Position</th>
-                <th>Department</th>
-                <th>Contact</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employees.map((employee) => (
-                <tr key={employee.id}>
-                  <td>{employee.name}</td>
-                  <td>{employee.position}</td>
-                  <td>{employee.department}</td>
-                  <td>{employee.contact_number}</td>
-                  <td>
-                    <button onClick={() => handleEditEmployee(employee)}>Edit</button>
-                    <button onClick={() => handleDeleteEmployee(employee.id)}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Edit User Modal */}
-        {editingUser && (
-          <div className="edit-modal">
-            <div className="modal-content">
-              <h3>Edit User</h3>
-              <form onSubmit={handleEditUserSubmit}>
-                <input type="text" name="name" value={editingUser.name} onChange={handleEditUserChange} required />
-                <select name="role" value={editingUser.role} onChange={handleEditUserChange} required>
-                  <option value="supervisor">Supervisor</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <div className="modal-actions">
-                  <button type="submit">Save</button>
-                  <button type="button" onClick={() => setEditingUser(null)}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Edit Employee Modal */}
-        {editingEmployee && (
-          <div className="edit-modal">
-            <div className="modal-content">
-              <h3>Edit Employee</h3>
-              <form onSubmit={handleEditEmployeeSubmit}>
-                <input type="text" name="name" value={editingEmployee.name} onChange={handleEditEmployeeChange} required />
-                <input type="text" name="position" value={editingEmployee.position} onChange={handleEditEmployeeChange} />
-                <input type="text" name="department" value={editingEmployee.department} onChange={handleEditEmployeeChange} />
-                <input type="email" name="email" value={editingEmployee.email} onChange={handleEditEmployeeChange} />
-                <input type="text" name="contact_number" value={editingEmployee.contact_number} onChange={handleEditEmployeeChange} />
-                <input type="text" name="address" value={editingEmployee.address} onChange={handleEditEmployeeChange} />
-                <div className="modal-actions">
-                  <button type="submit">Save</button>
-                  <button type="button" onClick={() => setEditingEmployee(null)}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-      </div>
-    );
+  if (currentView === 'addUser') {
+    return <AddUserPanel onBack={() => setCurrentView('dashboard')} onUserAdded={fetchUsers} />;
   }
 
   if (currentView === 'reports') {
@@ -704,13 +560,15 @@ const AdminPanel = ({ userName }) => {
 
         <div className="returns-info">
           <div className="info-card">
-            <h3>Returns Overview</h3>
-            <p>Manage all product returns and receipts from this section.</p>
+            <h3>📋 Returns Overview</h3>
+            <p>Manage all product returns and receipts from this section. Use the buttons above to access different return management features.</p>
             <ul>
-              <li>View all submitted returns</li>
-              <li>Add new return entries</li>
-              <li>Track return status</li>
-              <li>Generate return reports</li>
+              <li>View all submitted returns and track their status</li>
+              <li>Add new return entries with detailed information</li>
+              <li>Track return status and processing timeline</li>
+              <li>Generate comprehensive return reports (PDF/Excel/CSV)</li>
+              <li>Search and filter returns by date, user, or item</li>
+              <li>Edit and update existing return records</li>
             </ul>
           </div>
         </div>

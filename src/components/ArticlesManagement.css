@@ -36,6 +36,70 @@
   font-size: 24px;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.refresh-btn-sm {
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+}
+
+/* ===== 🔄 Return Status Badges ===== */
+.return-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+  color: white;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+.return-badge i {
+  font-size: 10px;
+}
+
+@keyframes pulse-badge {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+  }
+  50% {
+    box-shadow: 0 2px 12px rgba(255, 107, 107, 0.5);
+  }
+}
+
+tr.has-returns {
+  background: rgba(255, 107, 107, 0.03);
+  border-left: 3px solid #ff6b6b;
+}
+
+tr.has-returns:hover {
+  background: rgba(255, 107, 107, 0.06);
+}
+
+.refresh-btn-sm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+}
+
 /* ===== 🔍 Search and Filter Section ===== */
 .search-filter-container {
   display: flex;

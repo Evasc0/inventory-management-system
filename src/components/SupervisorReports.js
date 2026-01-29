@@ -13,13 +13,14 @@ const SupervisorReports = () => {
   const [includeReturns, setIncludeReturns] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Set default dates (last 30 days)
+  // Set default dates (last 6 months for better data coverage)
   React.useEffect(() => {
     const today = new Date();
-    const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+    const sixMonthsAgo = new Date(today);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     
     setDateRange({
-      startDate: thirtyDaysAgo.toISOString().split('T')[0],
+      startDate: sixMonthsAgo.toISOString().split('T')[0],
       endDate: today.toISOString().split('T')[0]
     });
   }, []);

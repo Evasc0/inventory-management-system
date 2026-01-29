@@ -99,9 +99,14 @@ const AdminDashboard = ({ onViewChange }) => {
       <div className="dashboard-header">
         <h1>Admin Dashboard</h1>
         <p>Welcome back, Administrator!</p>
-        <button className="refresh-btn" onClick={fetchDashboardData}>
-          <i className="fas fa-sync-alt"></i> Refresh
-        </button>
+        <div className="header-actions">
+          <button className="add-article-btn" onClick={() => onViewChange('articles')}>
+            <i className="fas fa-plus-circle"></i> Add Article
+          </button>
+          <button className="refresh-btn" onClick={fetchDashboardData}>
+            <i className="fas fa-sync-alt"></i> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -148,10 +153,17 @@ const AdminDashboard = ({ onViewChange }) => {
             onClick={() => onViewChange('articles')}
           />
           <QuickActionCard
-            title="Manage Users"
-            description="Add/edit system users"
+            title="Add New User"
+            description="Register employee/supervisor/admin"
             icon="fas fa-user-plus"
             color="green"
+            onClick={() => onViewChange('addUser')}
+          />
+          <QuickActionCard
+            title="Manage System Users"
+            description="Edit/delete users and employees"
+            icon="fas fa-users-cog"
+            color="purple"
             onClick={() => onViewChange('users')}
           />
           <QuickActionCard
@@ -165,7 +177,7 @@ const AdminDashboard = ({ onViewChange }) => {
             title="View Returns"
             description="Process return requests"
             icon="fas fa-undo"
-            color="purple"
+            color="red"
             onClick={() => onViewChange('returns')}
           />
         </div>

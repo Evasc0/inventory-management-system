@@ -14,6 +14,9 @@ const ReturnsManagement = () => {
   const [loading, setLoading] = useState(true);
   const [filterOption, setFilterOption] = useState('all');
   const [expandedReturns, setExpandedReturns] = useState({});
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
 
   const fetchReturns = useCallback(async () => {
     try {
@@ -38,6 +41,12 @@ const ReturnsManagement = () => {
       
       // Sort returns by date, most recent first
       returnsData = returnsData.sort((a, b) => new Date(b.date) - new Date(a.date));
+      
+      // Verify unique IDs to prevent toggle issues
+      const uniqueIds = new Set(returnsData.map(r => r.id));
+      if (uniqueIds.size !== returnsData.length) {
+        console.warn('⚠️ Duplicate return IDs detected! This may cause toggle issues.');
+      }
       
       console.log('Fetched returns:', returnsData); // For debugging
       setReturns(returnsData);
@@ -75,19 +84,39 @@ const ReturnsManagement = () => {
     };
     initialFetch();
     
-    // Set up polling for real-time updates
-    const refreshInterval = setInterval(async () => {
-      await fetchReturns();
-    }, 3000); // Poll every 3 seconds for more responsive updates
-    
-    return () => clearInterval(refreshInterval);
+    // WebSocket connection for real-time updates (if available)
+    // Removed aggressive 3-second polling for performance
   }, [fetchReturns, fetchEmployees]);
 
   const handleEditReturn = (returnItem) => {
+    console.log('Editing return item:', returnItem); // Debug log
     setEditingReturn({
       ...returnItem,
+      // Map snake_case to camelCase for form fields
+      rrspNo: returnItem.rrspNo || returnItem.rrsp_no || '',
+      icsNo: returnItem.icsNo || returnItem.ics_no || '',
+      dateAcquired: returnItem.dateAcquired || returnItem.date_acquired || '',
+      endUser: returnItem.endUser || returnItem.end_user || '',
       amount: parseFloat(returnItem.amount) || 0,
-      quantity: parseInt(returnItem.quantity) || 0
+      quantity: parseInt(returnItem.quantity) || 0,
+      date: returnItem.date ? returnItem.date.split('T')[0] : '',
+      description: returnItem.description || '',
+      remarks: returnItem.remarks || '',
+      // Returned By fields
+      returnedBy: returnItem.returned_by || '',
+      returnedByPosition: returnItem.returned_by_position || '',
+      returnedByDate: returnItem.returned_by_date ? returnItem.returned_by_date.split('T')[0] : '',
+      returnedByLocation: returnItem.returned_by_location || '',
+      // Received By fields
+      receivedBy: returnItem.received_by || '',
+      receivedByPosition: returnItem.received_by_position || '',
+      receivedByDate: returnItem.received_by_date ? returnItem.received_by_date.split('T')[0] : '',
+      receivedByLocation: returnItem.received_by_location || '',
+      // Second Receiver fields
+      secondReceivedBy: returnItem.second_received_by || '',
+      secondReceivedByPosition: returnItem.second_received_by_position || '',
+      secondReceivedByDate: returnItem.second_received_by_date ? returnItem.second_received_by_date.split('T')[0] : '',
+      secondReceivedByLocation: returnItem.second_received_by_location || ''
     });
   };
 
@@ -96,6 +125,28 @@ const ReturnsManagement = () => {
       ...prev,
       [returnId]: !prev[returnId]
     }));
+  };
+
+  const handleExportClick = () => {
+    // Set default dates (last 6 months to capture more data)
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setMonth(startDate.getMonth() - 6);
+    
+    setExportStartDate(startDate.toISOString().split('T')[0]);
+    setExportEndDate(endDate.toISOString().split('T')[0]);
+    setShowExportModal(true);
+  };
+
+  const handleExport = (format) => {
+    if (!exportStartDate || !exportEndDate) {
+      alert('Please select both start and end dates');
+      return;
+    }
+
+    const url = `${API_BASE_URL}/export-returns/${format}?startDate=${exportStartDate}&endDate=${exportEndDate}`;
+    window.open(url, '_blank');
+    setShowExportModal(false);
   };
 
   const handleEditSubmit = async (e) => {
@@ -107,15 +158,30 @@ const ReturnsManagement = () => {
       }
 
       const updatedReturn = {
-        rrsp_no: editingReturn.rrspNo,
-        date: editingReturn.date,
+        rrsp_no: editingReturn.rrspNo || editingReturn.rrsp_no || '',
+        date: editingReturn.date || '',
         description: editingReturn.description || '',
         quantity: parseInt(editingReturn.quantity) || 0,
-        ics_no: editingReturn.icsNo || '',
-        date_acquired: editingReturn.dateAcquired,
+        ics_no: editingReturn.icsNo || editingReturn.ics_no || '',
+        date_acquired: editingReturn.dateAcquired || editingReturn.date_acquired || '',
         amount: parseFloat(editingReturn.amount) || 0,
-        end_user: editingReturn.endUser,
-        remarks: editingReturn.remarks || ''
+        end_user: editingReturn.endUser || editingReturn.end_user || '',
+        remarks: editingReturn.remarks || '',
+        // Returned By fields
+        returned_by: editingReturn.returnedBy || '',
+        returned_by_position: editingReturn.returnedByPosition || '',
+        returned_by_date: editingReturn.returnedByDate || '',
+        returned_by_location: editingReturn.returnedByLocation || '',
+        // Received By fields
+        received_by: editingReturn.receivedBy || '',
+        received_by_position: editingReturn.receivedByPosition || '',
+        received_by_date: editingReturn.receivedByDate || '',
+        received_by_location: editingReturn.receivedByLocation || '',
+        // Second Receiver fields
+        second_received_by: editingReturn.secondReceivedBy || '',
+        second_received_by_position: editingReturn.secondReceivedByPosition || '',
+        second_received_by_date: editingReturn.secondReceivedByDate || '',
+        second_received_by_location: editingReturn.secondReceivedByLocation || ''
       };
 
       console.log('Updating return with data:', updatedReturn);
@@ -134,6 +200,7 @@ const ReturnsManagement = () => {
       if (response.data) {
         alert('Return updated successfully!');
         setEditingReturn(null);
+        // Refresh only after successful update
         fetchReturns();
       }
     } catch (error) {
@@ -172,9 +239,17 @@ const ReturnsManagement = () => {
     <div className="returns-management">
       <div className="returns-header">
         <h2>Returns Management</h2>
-        <button onClick={() => navigate('/admin')} className="back-btn">
-          ← Back to Admin Panel
-        </button>
+        <div className="header-actions">
+          <button onClick={fetchReturns} className="refresh-btn-sm">
+            <i className="fas fa-sync-alt"></i> Refresh
+          </button>
+          <button onClick={handleExportClick} className="export-btn">
+            <i className="fas fa-file-export"></i> Export Returns
+          </button>
+          <button onClick={() => navigate('/admin')} className="back-btn">
+            ← Back to Admin Panel
+          </button>
+        </div>
       </div>
 
       <div className="search-filter-container">
@@ -308,7 +383,7 @@ const ReturnsManagement = () => {
                 <input
                   type="date"
                   name="date"
-                  value={editingReturn.date || ''}
+                  value={editingReturn.date ? editingReturn.date.split('T')[0] : ''}
                   onChange={handleInputChange}
                   required
                 />
@@ -347,7 +422,7 @@ const ReturnsManagement = () => {
                 <input
                   type="date"
                   name="dateAcquired"
-                  value={editingReturn.dateAcquired || ''}
+                  value={editingReturn.dateAcquired ? editingReturn.dateAcquired.split('T')[0] : ''}
                   onChange={handleInputChange}
                 />
               </div>
@@ -400,11 +475,220 @@ const ReturnsManagement = () => {
                   <option value="For Disposal">For Disposal</option>
                 </select>
               </div>
+
+              {/* Returned By Section */}
+              <div className="form-section-header">
+                <h4>📤 Returned By Information</h4>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Name:</label>
+                  <input
+                    type="text"
+                    name="returnedBy"
+                    value={editingReturn.returnedBy || ''}
+                    onChange={handleInputChange}
+                    placeholder="Name of person returning"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Position:</label>
+                  <input
+                    type="text"
+                    name="returnedByPosition"
+                    value={editingReturn.returnedByPosition || ''}
+                    onChange={handleInputChange}
+                    placeholder="Position/Title"
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Date:</label>
+                  <input
+                    type="date"
+                    name="returnedByDate"
+                    value={editingReturn.returnedByDate || ''}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Location:</label>
+                  <input
+                    type="text"
+                    name="returnedByLocation"
+                    value={editingReturn.returnedByLocation || ''}
+                    onChange={handleInputChange}
+                    placeholder="Location/Office"
+                  />
+                </div>
+              </div>
+
+              {/* Received By Section */}
+              <div className="form-section-header">
+                <h4>📥 Received By Information</h4>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Name:</label>
+                  <input
+                    type="text"
+                    name="receivedBy"
+                    value={editingReturn.receivedBy || ''}
+                    onChange={handleInputChange}
+                    placeholder="Name of receiver"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Position:</label>
+                  <input
+                    type="text"
+                    name="receivedByPosition"
+                    value={editingReturn.receivedByPosition || ''}
+                    onChange={handleInputChange}
+                    placeholder="Position/Title"
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Date:</label>
+                  <input
+                    type="date"
+                    name="receivedByDate"
+                    value={editingReturn.receivedByDate || ''}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Location:</label>
+                  <input
+                    type="text"
+                    name="receivedByLocation"
+                    value={editingReturn.receivedByLocation || ''}
+                    onChange={handleInputChange}
+                    placeholder="Location/Office"
+                  />
+                </div>
+              </div>
+
+              {/* Second Receiver Section */}
+              <div className="form-section-header">
+                <h4>📥 Second Receiver Information (Optional)</h4>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Name:</label>
+                  <input
+                    type="text"
+                    name="secondReceivedBy"
+                    value={editingReturn.secondReceivedBy || ''}
+                    onChange={handleInputChange}
+                    placeholder="Name of second receiver"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Position:</label>
+                  <input
+                    type="text"
+                    name="secondReceivedByPosition"
+                    value={editingReturn.secondReceivedByPosition || ''}
+                    onChange={handleInputChange}
+                    placeholder="Position/Title"
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Date:</label>
+                  <input
+                    type="date"
+                    name="secondReceivedByDate"
+                    value={editingReturn.secondReceivedByDate || ''}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Location:</label>
+                  <input
+                    type="text"
+                    name="secondReceivedByLocation"
+                    value={editingReturn.secondReceivedByLocation || ''}
+                    onChange={handleInputChange}
+                    placeholder="Location/Office"
+                  />
+                </div>
+              </div>
+
               <div className="modal-buttons">
                 <button type="submit">Save Changes</button>
                 <button type="button" onClick={() => setEditingReturn(null)}>Cancel</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="export-modal" onClick={(e) => {
+          if (e.target.className === 'export-modal') {
+            setShowExportModal(false);
+          }
+        }}>
+          <div className="export-modal-content">
+            <h3>Export Returns Report</h3>
+            <p style={{ fontSize: '14px', color: '#666', marginBottom: '15px', textAlign: 'center' }}>
+              Select date range to export returns. Includes ICS No, Date Acquired, and all return details.
+            </p>
+            <div className="date-range">
+              <div className="form-group">
+                <label>Start Date:</label>
+                <input
+                  type="date"
+                  value={exportStartDate}
+                  onChange={(e) => setExportStartDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>End Date:</label>
+                <input
+                  type="date"
+                  value={exportEndDate}
+                  onChange={(e) => setExportEndDate(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div style={{ 
+              padding: '10px', 
+              background: '#e8f4f8', 
+              borderRadius: '8px', 
+              marginBottom: '15px',
+              fontSize: '13px',
+              color: '#1e3c72'
+            }}>
+              <strong>Note:</strong> Only returns between the selected dates will be exported. 
+              Expand date range if records are missing.
+            </div>
+            <div className="export-buttons">
+              <button onClick={() => handleExport('pdf')} className="export-option pdf">
+                <i className="fas fa-file-pdf"></i> Export as PDF
+              </button>
+              <button onClick={() => handleExport('excel')} className="export-option excel">
+                <i className="fas fa-file-excel"></i> Export as Excel
+              </button>
+              <button onClick={() => handleExport('csv')} className="export-option csv">
+                <i className="fas fa-file-csv"></i> Export as CSV
+              </button>
+            </div>
+            <button 
+              onClick={() => setShowExportModal(false)} 
+              className="cancel-btn"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

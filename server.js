@@ -77,6 +77,28 @@ const http = require("http");  // Simple in-memory cache implementation
   const isDev = !isPackaged;
   process.env.NODE_ENV = isDev ? "development" : "production";
   
+  // Critical: Handle uncaught exceptions to prevent silent crashes
+  process.on('uncaughtException', (error) => {
+    console.error("\n" + "=".repeat(80));
+    console.error("❌ FATAL: Uncaught Exception in Server");
+    console.error("=".repeat(80));
+    console.error("Error:", error.message);
+    console.error("Stack:", error.stack);
+    console.error("=".repeat(80));
+    // Flush stdout/stderr before exiting
+    if (process.stdout.flush) process.stdout.flush();
+    if (process.stderr.flush) process.stderr.flush();
+    setTimeout(() => process.exit(1), 1000);
+  });
+  
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error("\n" + "=".repeat(80));
+    console.error("❌ FATAL: Unhandled Promise Rejection");
+    console.error("=".repeat(80));
+    console.error("Reason:", reason);
+    console.error("=".repeat(80));
+  });
+  
   // Log server startup info
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("🚀 SERVER STARTING");
@@ -164,47 +186,77 @@ const http = require("http");  // Simple in-memory cache implementation
   server.use(express.urlencoded({limit: '50mb', extended: true}));
   
   // Serve static files in production
+  let buildPath = null; // Declare at module scope for logging
+  
   if (!isDev) {
-    let buildPath = null;
-    
     // First, check if BUILD_PATH was provided by Electron main process
-    if (process.env.BUILD_PATH && fs.existsSync(process.env.BUILD_PATH)) {
+    if (process.env.BUILD_PATH && process.env.BUILD_PATH !== '' && fs.existsSync(process.env.BUILD_PATH)) {
       buildPath = process.env.BUILD_PATH;
       console.log('✅ Using BUILD_PATH from environment:', buildPath);
     } else {
+      // Determine if we're in an asar archive
+      const isInAsar = __dirname.includes('app.asar');
+      
       // Try multiple possible build paths for production
-      // DON'T use process.resourcesPath - it's undefined when running via node.exe!
       const possibleBuildPaths = [
+        // From environment (may be empty string)
+        process.env.BUILD_PATH,
+        // For asar: Check app.asar.unpacked first (highest priority)
+        isInAsar && __dirname.replace('app.asar', 'app.asar.unpacked') && path.join(__dirname.replace('app.asar', 'app.asar.unpacked'), 'build'),
+        // For asar: Also check if build is inside asar itself
+        isInAsar && path.join(__dirname, 'build'),
+        // Relative to server.js location (for non-asar or unpacked)
         path.join(__dirname, 'build'),
         path.join(__dirname, '..', 'build'),
-        path.join(process.cwd(), 'build')
-      ].filter(Boolean);
+        // From current working directory
+        path.join(process.cwd(), 'build'),
+        // From app root if provided
+        process.env.APP_ROOT && path.join(process.env.APP_ROOT, 'build'),
+        // From process.resourcesPath (Electron-specific)
+        process.resourcesPath && path.join(process.resourcesPath, 'app.asar.unpacked', 'build'),
+        process.resourcesPath && path.join(process.resourcesPath, 'build')
+      ].filter(p => p && p !== '');
       
       console.log('🔍 Searching for build folder...');
-      for (const p of possibleBuildPaths) {
-        console.log(`  Checking: ${p}`);
-        if (fs.existsSync(p)) {
+      console.log('   __dirname:', __dirname);
+      console.log('   process.cwd():', process.cwd());
+      console.log('   Is in asar:', isInAsar);
+      console.log('   process.resourcesPath:', process.resourcesPath || 'NOT SET');
+      console.log('   BUILD_PATH env:', process.env.BUILD_PATH || 'NOT SET');
+      console.log('');
+      
+      for (let i = 0; i < possibleBuildPaths.length; i++) {
+        const p = possibleBuildPaths[i];
+        const exists = fs.existsSync(p);
+        const hasIndex = exists && fs.existsSync(path.join(p, 'index.html'));
+        
+        console.log(`${i + 1}. ${exists ? (hasIndex ? '✅ VALID' : '⚠️  EXISTS (no index.html)') : '❌ NOT FOUND'}: ${p}`);
+        
+        if (exists && hasIndex && !buildPath) {
           buildPath = p;
-          console.log(`  ✅ FOUND!`);
-          break;
-        } else {
-          console.log(`  ❌ Not found`);
         }
       }
       
       if (!buildPath) {
-        console.error('❌ Build directory not found! Tried:', possibleBuildPaths);
-        console.error('📍 __dirname:', __dirname);
-        console.error('📍 process.cwd():', process.cwd());
-        console.error('📍 process.execPath:', process.execPath);
-        console.error('📍 process.resourcesPath:', process.resourcesPath);
-        // Use the first path as fallback
-        buildPath = possibleBuildPaths[0];
+        console.error('❌ Build directory not found! Static files will not be served.');
+        console.error('   Application may fail to load in production.');
+        // Use the first path as fallback even if it doesn't exist
+        buildPath = possibleBuildPaths.find(p => p) || path.join(__dirname, 'build');
+        console.error('   Using fallback:', buildPath);
       }
     }
     
     console.log('📁 Serving static files from:', buildPath);
-    server.use(express.static(buildPath));
+    
+    // Only serve static files if directory exists
+    if (fs.existsSync(buildPath)) {
+      server.use(express.static(buildPath));
+    } else {
+      console.error('⚠️  WARNING: Build directory does not exist!');
+      console.error('   Static files will not be served.');
+    }
+    
+    console.log('');
     
     // Serve index.html for all routes not starting with /api or /get-
     server.get('*', (req, res, next) => {
@@ -245,41 +297,89 @@ function getDatabasePath() {
     if (!fs.existsSync(devDir)) fs.mkdirSync(devDir, { recursive: true });
     return path.join(devDir, "database.sqlite");
   } else {
-    // In production, try multiple paths
+    // In production, try multiple paths with better validation
     const possiblePaths = [
-      // Network drive (if specified)
-      process.env.DB_NETWORK_PATH && path.join(process.env.DB_NETWORK_PATH, "inventory_database.sqlite"),
-      // Resources path from Electron
+      // 1. Resources path from Electron main process (MOST RELIABLE)
       process.env.RESOURCES_PATH && path.join(process.env.RESOURCES_PATH, "database.sqlite"),
-      // Local data directory
-      path.join(process.cwd(), "resources", "database.sqlite"),
-      // App data directory
+      
+      // 2. User data directory (RECOMMENDED for production)
       path.join(require('os').homedir(), "AppData", "Local", "BTS-Inventory", "database.sqlite"),
-      // Fallback to current directory
-      path.join(__dirname, "resources", "database.sqlite")
+      
+      // 3. Network drive (if specified)
+      process.env.DB_NETWORK_PATH && path.join(process.env.DB_NETWORK_PATH, "inventory_database.sqlite"),
+      
+      // 4. Current working directory (where node.exe was spawned)
+      path.join(process.cwd(), "resources", "database.sqlite"),
+      
+      // 5. Relative to server.js location
+      path.join(__dirname, "resources", "database.sqlite"),
+      path.join(__dirname, "..", "resources", "database.sqlite"),
+      
+      // 6. Fallback to current directory
+      path.join(__dirname, "database.sqlite")
     ].filter(Boolean);
     
-    for (const dbPath of possiblePaths) {
+    console.log("🔍 Searching for database location...");
+    console.log("   RESOURCES_PATH env:", process.env.RESOURCES_PATH || "NOT SET");
+    console.log("   __dirname:", __dirname);
+    console.log("   process.cwd():", process.cwd());
+    console.log("");
+    
+    for (let i = 0; i < possiblePaths.length; i++) {
+      const dbPath = possiblePaths[i];
       const dir = path.dirname(dbPath);
+      
       try {
+        // Check if we can create/access the directory
         if (!fs.existsSync(dir)) {
           fs.mkdirSync(dir, { recursive: true });
         }
-        console.log(`✅ Using database path: ${dbPath}`);
+        
+        // Test write permissions
+        const testFile = path.join(dir, '.write-test');
+        fs.writeFileSync(testFile, 'test');
+        fs.unlinkSync(testFile);
+        
+        console.log(`${i + 1}. ✅ SELECTED: ${dbPath}`);
+        console.log(`   Directory is writable: ${dir}`);
         return dbPath;
       } catch (err) {
-        console.log(`⚠️ Cannot use path ${dbPath}: ${err.message}`);
+        console.log(`${i + 1}. ❌ FAILED: ${dbPath}`);
+        console.log(`   Error: ${err.message}`);
       }
     }
     
     // Final fallback
     const fallbackPath = path.join(__dirname, "database.sqlite");
-    console.log(`⚠️ Using fallback database path: ${fallbackPath}`);
+    console.log(`⚠️  Using FINAL FALLBACK: ${fallbackPath}`);
     return fallbackPath;
   }
 }
 
 const dbPath = getDatabasePath();
+
+// Ensure database directory exists
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  try {
+    fs.mkdirSync(dbDir, { recursive: true });
+    console.log("✅ Created database directory:", dbDir);
+  } catch (err) {
+    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.error("❌ CRITICAL: Failed to create database directory");
+    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.error("Path:", dbDir);
+    console.error("Error:", err.message);
+    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    
+    // Flush output and exit
+    if (process.stderr.flush) process.stderr.flush();
+    setTimeout(() => process.exit(1), 500);
+  }
+}
+
+console.log("📁 Database path:", dbPath);
+console.log("📁 Database directory:", dbDir);
 
 // Track if server has already started to prevent multiple instances
 let serverStarted = false;
@@ -288,6 +388,8 @@ let serverStarted = false;
 const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
   if (err) {
     console.error("❌ Error opening database:", err.message);
+    console.error("❌ Database path was:", dbPath);
+    console.error("❌ Check if the directory has write permissions.");
     process.exit(1);
   }
   
@@ -356,24 +458,59 @@ const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CR
       global.broadcast = broadcast;
       
       // Start the HTTP server with both Express and WebSocket
-      httpServer.listen(PORT, () => {
-        console.log(`🚀 Server running on http://localhost:${PORT}`);
+      httpServer.listen(PORT, '0.0.0.0', () => {
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.log(`🚀 SERVER READY AND LISTENING`);
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.log(`🌐 Server URL: http://localhost:${PORT}`);
         console.log(`📊 Environment: ${process.env.NODE_ENV}`);
         console.log(`📁 Database: ${dbPath}`);
-        console.log(`🔗 WebSocket server ready at ws://localhost:${PORT}/ws`);
-        console.log("✅ Backend server is ready and listening!");
+        console.log(`🔗 WebSocket: ws://localhost:${PORT}/ws`);
+        console.log(`📂 Build Path: ${buildPath || 'Not set'}`);
+        console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         
-        // Send startup signal to stdout for Electron to detect
-        process.stdout.write(`SERVER_READY:${PORT}\n`);
+        // CRITICAL: Send startup signal to stdout for Electron to detect
+        // Use console.log AND process.stdout.write for redundancy
+        const startupSignal = `SERVER_READY:${PORT}`;
+        console.log(startupSignal);
+        process.stdout.write(startupSignal + '\n');
+        
+        // Force flush stdout/stderr immediately (critical for Windows)
+        if (process.stdout.flush) {
+          process.stdout.flush();
+        }
+        if (process.stderr.flush) {
+          process.stderr.flush();
+        }
+        
+        // Additional redundant signal after 100ms
+        setTimeout(() => {
+          process.stdout.write(startupSignal + '\n');
+          if (process.stdout.flush) process.stdout.flush();
+        }, 100);
       }).on('error', (err) => {
+        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        console.error("❌ SERVER FAILED TO START");
+        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         if (err.code === 'EADDRINUSE') {
           console.error(`❌ Port ${PORT} is already in use!`);
-          console.error("Please close any other instances of the application and try again.");
-          process.exit(1);
+          console.error("💡 Solution: Close any other instances of the application.");
+          console.error("💡 Or check Task Manager for node.exe processes.");
         } else {
-          console.error("❌ Server error:", err);
-          process.exit(1);
+          console.error("❌ Server error:", err.message);
+          console.error("❌ Error code:", err.code);
+          console.error("❌ Error stack:", err.stack);
         }
+        
+        // Flush error output
+        if (process.stderr.flush) {
+          process.stderr.flush();
+        }
+        
+        // Exit with error code
+        setTimeout(() => process.exit(1), 500);
+        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        process.exit(1);
       });
     });
   });
@@ -413,6 +550,55 @@ const runInTransaction = async (queries) => {
 };
   
 // API Routes and other middleware configurations follow here...
+
+// 🔍 Data integrity check endpoint
+server.get('/api/returns/validate', (req, res) => {
+  const validationSql = `
+    SELECT 
+      COUNT(*) as total_returns,
+      COUNT(ics_no) as returns_with_ics,
+      COUNT(date_acquired) as returns_with_date,
+      COUNT(CASE WHEN ics_no IS NULL OR ics_no = '' THEN 1 END) as missing_ics,
+      COUNT(CASE WHEN date_acquired IS NULL OR date_acquired = '' THEN 1 END) as missing_date,
+      MIN(date) as oldest_return,
+      MAX(date) as newest_return
+    FROM returns
+  `;
+  
+  db.get(validationSql, [], (err, stats) => {
+    if (err) {
+      console.error("❌ Validation query error:", err);
+      return res.status(500).json({ error: "Database error during validation" });
+    }
+    
+    const issues = [];
+    if (stats.missing_ics > 0) {
+      issues.push(`${stats.missing_ics} return(s) missing ICS No (property number)`);
+    }
+    if (stats.missing_date > 0) {
+      issues.push(`${stats.missing_date} return(s) missing Date Acquired`);
+    }
+    
+    res.json({
+      healthy: issues.length === 0,
+      statistics: {
+        total: stats.total_returns,
+        withIcsNo: stats.returns_with_ics,
+        withDateAcquired: stats.returns_with_date,
+        missingIcsNo: stats.missing_ics,
+        missingDateAcquired: stats.missing_date,
+        dateRange: {
+          oldest: stats.oldest_return,
+          newest: stats.newest_return
+        }
+      },
+      issues: issues.length > 0 ? issues : ['No data integrity issues detected'],
+      message: issues.length === 0 
+        ? '✅ All returns have complete data' 
+        : `⚠️ ${issues.length} data quality issue(s) found`
+    });
+  });
+});
 
 // Health check endpoint for Electron app
 server.get('/ping', (req, res) => {
@@ -749,7 +935,10 @@ server.get("/api/products/all", async (req, res) => {
         CASE 
           WHEN p.FK_employee IS NOT NULL THEN COALESCE(e.name, 'No User Assigned')
           ELSE 'Admin'
-        END as assigned_to
+        END as assigned_to,
+        (SELECT COUNT(*) FROM returns r 
+         WHERE r.ics_no = p.property_number 
+         OR r.description = p.article) as return_count
       FROM products p
       LEFT JOIN employee e ON p.FK_employee = e.id
       ORDER BY p.date_acquired DESC NULLS LAST, p.id DESC`;
@@ -777,7 +966,9 @@ server.get("/api/products/all", async (req, res) => {
         employee_email: row.employee_email || '',
         employee_contact: row.employee_contact || '',
         employee_address: row.employee_address || '',
-        user: row.assigned_to || 'No User Assigned' // This will be used for filtering
+        user: row.assigned_to || 'No User Assigned', // This will be used for filtering
+        return_count: row.return_count || 0,
+        has_returns: (row.return_count || 0) > 0
       }));
 
       console.log(`✅ Found ${processedRows.length} articles`);
@@ -1044,12 +1235,9 @@ const createTables = (callback) => {
   db.serialize(() => {
     console.log("ℹ️ Checking/Creating tables...");
 
-    // First, drop existing tables if they exist
-    db.run("DROP TABLE IF EXISTS returns");
-    db.run("DROP TABLE IF EXISTS products");
-    db.run("DROP TABLE IF EXISTS users");
-    db.run("DROP TABLE IF EXISTS employee");
-
+    // ⚠️ NEVER drop tables in production - this would delete all data!
+    // Tables are created with IF NOT EXISTS, so they're safe
+    
     // Track how many async table creations are complete
     let completed = 0;
     const total = 5; // Updated to 5 tables (including activity_logs)
@@ -1675,7 +1863,10 @@ server.post("/add-receipt", (req, res) => {
 server.put("/api/returns/:id", (req, res) => {
   const { id } = req.params;
   const {
-    rrsp_no, date, description, quantity, ics_no, date_acquired, amount, end_user, remarks
+    rrsp_no, date, description, quantity, ics_no, date_acquired, amount, end_user, remarks,
+    returned_by, returned_by_position, returned_by_date, returned_by_location,
+    received_by, received_by_position, received_by_date, received_by_location,
+    second_received_by, second_received_by_position, second_received_by_date, second_received_by_location
   } = req.body;
 
   console.log("🔄 Updating return with ID:", id);
@@ -1688,11 +1879,18 @@ server.put("/api/returns/:id", (req, res) => {
   db.run(
     `UPDATE returns SET 
      rrsp_no = ?, date = ?, description = ?, quantity = ?, ics_no = ?, 
-     date_acquired = ?, amount = ?, end_user = ?, remarks = ?
+     date_acquired = ?, amount = ?, end_user = ?, remarks = ?,
+     returned_by = ?, returned_by_position = ?, returned_by_date = ?, returned_by_location = ?,
+     received_by = ?, received_by_position = ?, received_by_date = ?, received_by_location = ?,
+     second_received_by = ?, second_received_by_position = ?, second_received_by_date = ?, second_received_by_location = ?
      WHERE id = ?`,
     [
       rrsp_no, date, description, parseInt(quantity), ics_no || '', 
-      date_acquired || '', parseFloat(amount) || 0, end_user, remarks || '', id
+      date_acquired || '', parseFloat(amount) || 0, end_user, remarks || '',
+      returned_by || '', returned_by_position || '', returned_by_date || '', returned_by_location || '',
+      received_by || '', received_by_position || '', received_by_date || '', received_by_location || '',
+      second_received_by || '', second_received_by_position || '', second_received_by_date || '', second_received_by_location || '',
+      id
     ],
     function(err) {
       if (err) {
@@ -1703,7 +1901,7 @@ server.put("/api/returns/:id", (req, res) => {
         return res.status(404).json({ error: "Return not found" });
       }
       
-      console.log("✅ Return updated successfully");
+      console.log("✅ Return updated successfully (including sender/receiver fields)");
       
       // Broadcast real-time update to all connected clients
       if (global.broadcast) {
@@ -2074,24 +2272,28 @@ server.get("/export-returns/pdf", (req, res) => {
       doc.fontSize(16).text('Returns', { align: 'center' });
       doc.moveDown();
       
-      doc.fontSize(10).font('Helvetica-Bold');
-      doc.text('RRSP No', 50, doc.y);
-      doc.text('Date', 120, doc.y);
-      doc.text('Description', 180, doc.y);
-      doc.text('Quantity', 300, doc.y);
-      doc.text('Amount', 360, doc.y);
-      doc.text('End User', 420, doc.y);
+      doc.fontSize(9).font('Helvetica-Bold');
+      doc.text('RRSP No', 30, doc.y);
+      doc.text('Date', 90, doc.y);
+      doc.text('ICS No', 140, doc.y);
+      doc.text('Date Acq.', 210, doc.y);
+      doc.text('Description', 270, doc.y);
+      doc.text('Qty', 360, doc.y);
+      doc.text('Amount', 390, doc.y);
+      doc.text('End User', 450, doc.y);
       doc.moveDown();
       
-      doc.font('Helvetica').fontSize(8);
+      doc.font('Helvetica').fontSize(7);
       returns.forEach((r) => {
         const y = doc.y;
-        doc.text(r.rrsp_no || '', 50, y);
-        doc.text(new Date(r.date).toLocaleDateString(), 120, y);
-        doc.text(r.description || '', 180, y);
-        doc.text(r.quantity || '', 300, y);
-        doc.text(`₱${Number(r.amount).toLocaleString()}`, 360, y);
-        doc.text(r.end_user || '', 420, y);
+        doc.text(r.rrsp_no || '', 30, y, { width: 55 });
+        doc.text(new Date(r.date).toLocaleDateString(), 90, y, { width: 45 });
+        doc.text(r.ics_no || 'N/A', 140, y, { width: 65 });
+        doc.text(r.date_acquired ? new Date(r.date_acquired).toLocaleDateString() : 'N/A', 210, y, { width: 55 });
+        doc.text((r.description || '').substring(0, 30), 270, y, { width: 85 });
+        doc.text(r.quantity || '', 360, y, { width: 25 });
+        doc.text(`₱${Number(r.amount).toLocaleString()}`, 390, y, { width: 55 });
+        doc.text((r.end_user || '').substring(0, 25), 450, y, { width: 80 });
         doc.moveDown(0.5);
       });
     } else {
@@ -2153,6 +2355,61 @@ server.get("/export-returns/excel", (req, res) => {
         console.error("Error writing excel:", err);
         res.status(500).send("Error generating excel file");
       });
+  });
+});
+
+// 🚀 Export Returns as CSV
+server.get("/export-returns/csv", (req, res) => {
+  const { startDate, endDate } = req.query;
+
+  // Returns query
+  const returnsSql = `
+    SELECT r.*, e.name as employee_name
+    FROM returns r
+    LEFT JOIN employee e ON r.end_user = e.name
+    WHERE r.date BETWEEN ? AND ?
+    ORDER BY r.date DESC
+  `;
+
+  // Execute returns query
+  db.all(returnsSql, [startDate, endDate], (err, returns) => {
+    if (err) {
+      console.error("Error fetching returns:", err);
+      return res.status(500).send("Error generating report");
+    }
+
+    // Create CSV content
+    const headers = [
+      'RRSP No', 'Date', 'Description', 'Quantity', 'ICS No', 
+      'Date Acquired', 'Amount', 'End User', 'Returned By', 
+      'Returned By Position', 'Received By', 'Received By Position', 'Remarks'
+    ];
+    
+    let csvContent = headers.join(',') + '\n';
+    
+    returns.forEach(r => {
+      const row = [
+        `"${r.rrsp_no || ''}"`,
+        `"${r.date || ''}"`,
+        `"${(r.description || '').replace(/"/g, '""')}"`,
+        r.quantity || 0,
+        `"${r.ics_no || ''}"`,
+        `"${r.date_acquired || ''}"`,
+        r.amount || 0,
+        `"${(r.end_user || '').replace(/"/g, '""')}"`,
+        `"${(r.returned_by || '').replace(/"/g, '""')}"`,
+        `"${(r.returned_by_position || '').replace(/"/g, '""')}"`,
+        `"${(r.received_by || '').replace(/"/g, '""')}"`,
+        `"${(r.received_by_position || '').replace(/"/g, '""')}"`,
+        `"${(r.remarks || '').replace(/"/g, '""')}"`
+      ];
+      csvContent += row.join(',') + '\n';
+    });
+
+    // Send CSV file
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=returns_report.csv');
+    res.send(csvContent);
   });
 });
 
