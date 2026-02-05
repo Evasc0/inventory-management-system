@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './EmployeeDashboard.css';
 import { useNavigate } from 'react-router-dom';
+import StatCard from './common/StatCard';
+import QuickActionCard from './common/QuickActionCard';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -74,35 +76,7 @@ const EmployeeDashboard = ({ userName, onViewChange }) => {
     }
   };
 
-  const StatCard = ({ title, value, icon, color, onClick }) => (
-    <div className={`stat-card ${color}`} onClick={onClick}>
-      <div className="stat-icon">
-        <i className={icon}></i>
-      </div>
-      <div className="stat-content">
-        <h3>{value}</h3>
-        <p>{title}</p>
-      </div>
-      <div className="stat-arrow">
-        <i className="fas fa-chevron-right"></i>
-      </div>
-    </div>
-  );
 
-  const QuickActionCard = ({ title, description, icon, color, onClick }) => (
-    <div className={`quick-action-card ${color}`} onClick={onClick}>
-      <div className="action-icon">
-        <i className={icon}></i>
-      </div>
-      <div className="action-content">
-        <h4>{title}</h4>
-        <p>{description}</p>
-      </div>
-      <div className="action-arrow">
-        <i className="fas fa-arrow-right"></i>
-      </div>
-    </div>
-  );
 
   if (loading) {
     return (
