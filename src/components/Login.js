@@ -80,7 +80,7 @@ const Login = ({ onLogin }) => {
       <div className="login-card">
         <div className="logo-section">
           <div className="logo-icon">
-            <i className="fas fa-boxes"></i>
+            <img src="/logo192.png" alt="Logo" />
           </div>
           <h2>Inventory System</h2>
           <p className="subtitle">Sign in to access your dashboard</p>
@@ -155,7 +155,7 @@ const Login = ({ onLogin }) => {
         <div className="login-header">
           <div className="logo-container">
             <div className="logo-icon">
-              <i className="fas fa-boxes"></i>
+              <img src="/logo192.png" alt="Logo" />
             </div>
             <h1>Inventory System</h1>
           </div>
